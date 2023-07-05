@@ -2,6 +2,11 @@
 
 Git Commit Formatter is a Rust project aimed to standardize git commit messages. It utilizes the branch name and commit message to create a formatted commit. It follows a ticketing system for tracking issues, using a pattern like `ABC-123` where `ABC` stands for a project key and `123` represents an issue number.
 
+* ABC-123-v12 Message -> ABC-123 Message
+* ABC-123b Message    -> ABC-123 Message
+* ABC-123 Message     -> ABC-123 Message
+* Message             -> Message
+
 ## Features
 
 * Checks if there are any uncommitted changes in the current repository.
