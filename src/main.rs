@@ -55,7 +55,7 @@ pub(crate) fn commit(br: &str, msg: &str) -> Result<String> {
 }
 
 // Check if there are any uncommitted changes
-pub(crate) fn has_changes(repo: &Repository) -> Result<bool, anyhow::Error> {
+pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool, anyhow::Error> {
   let mut options = StatusOptions::new();
   options.include_untracked(true).recurse_untracked_dirs(true);
 
@@ -120,15 +120,12 @@ fn branch_name(repo: &Repository) -> Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-  let current_dir = std::env::current_dir().context("Failed to get current directory")?;
-  let repo = Repository::open_ext(
-    current_dir,
-    git2::RepositoryOpenFlags::empty(),
-    &[] as &[&str],
-  )
-  .context("Failed to open repository")?;
+  // Recursively search for a git repository
+  let current_dir = std::env::current_dir()?;
+  let flags = git2::RepositoryOpenFlags::empty();
+  let repo = Repository::open_ext(current_dir, flags, &[] as &[&str])?;
 
-  if !has_changes(&repo)? {
+  if !has_repo_uncommited_changes(&repo)? {
     anyhow::bail!("No uncommitted changes found");
   }
 
