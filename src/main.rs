@@ -1,4 +1,3 @@
-
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
@@ -66,28 +65,7 @@ pub(crate) fn has_changes(repo: &Repository) -> Result<bool, anyhow::Error> {
   }
 }
 
-fn main() -> anyhow::Result<()> {
-  let current_dir = std::env::current_dir().context("Failed to get current directory")?;
-  let repo = Repository::open_ext(
-    current_dir,
-    git2::RepositoryOpenFlags::empty(),
-    &[] as &[&str],
-  )
-  .context("Failed to open repository")?;
-
-  if !has_changes(&repo)? {
-    anyhow::bail!("No uncommitted changes found");
-  }
-
-  let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
-  let head = repo.head().context("Failed to get HEAD")?;
-  // Branch name used to generate prefixes for commit messages
-  let Some(branch_name) = head.shorthand() else {
-    bail!("Could not find branch name");
-  };
-
-  let commit_msg = commit(branch_name, &message)?;
-
+fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
   let mut index = repo.index().context("Failed to get current index")?;
   index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
   index.write().context("Failed to write index from `git add`")?;
@@ -127,6 +105,37 @@ fn main() -> anyhow::Result<()> {
       )
       .context("Failed to commit")?;
   }
+
+  Ok(())
+}
+
+fn branch_name(repo: &Repository) -> Result<String> {
+  let head = repo.head().context("Failed to get HEAD")?;
+
+  let Some(branch_name) = head.shorthand() else {
+    bail!("Could not find branch name");
+  };
+
+  Ok(branch_name.to_string())
+}
+
+fn main() -> anyhow::Result<()> {
+  let current_dir = std::env::current_dir().context("Failed to get current directory")?;
+  let repo = Repository::open_ext(
+    current_dir,
+    git2::RepositoryOpenFlags::empty(),
+    &[] as &[&str],
+  )
+  .context("Failed to open repository")?;
+
+  if !has_changes(&repo)? {
+    anyhow::bail!("No uncommitted changes found");
+  }
+
+  let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
+  let branch_name = branch_name(&repo)?;
+  let commit_msg = commit(branch_name.as_str(), &message)?;
+  add_and_commit(&commit_msg, &repo)?;
 
   Ok(())
 }
