@@ -68,7 +68,7 @@ fn has_changes(repo: &Repository) -> Result<bool, String> {
 fn main() {
   let current_dir = std::env::current_dir().expect("Failed to get current directory");
   let repo =
-    Repository::open_ext(current_dir, git2::RepositoryOpenFlags::empty(), &[]).expect("Failed to open repository");
+    Repository::open_ext(current_dir, git2::RepositoryOpenFlags::empty(), &[] as &[&str]).expect("Failed to open repository");
 
   let has_changes = has_changes(&repo).expect("Failed to check for uncommitted changes");
   if !has_changes {
