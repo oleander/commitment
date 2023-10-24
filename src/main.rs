@@ -4,6 +4,11 @@ use anyhow::Context;
 use anyhow::Result;
 use git2::{IndexAddOption, Repository, StatusOptions};
 use regex::Regex;
+use lazy_static::lazy_static;
+
+lazy_static! {
+  static ref RE: Regex = Regex::new(r"^([A-Z]+-\d+)(\S*)?(?:\s+(.*))?$").unwrap();
+}
 
 pub(crate) trait Ticket {
   fn to_ticket(&self) -> (Option<&str>, Option<&str>);
@@ -16,9 +21,7 @@ impl Ticket for str {
       return (None, None);
     }
 
-    let re = Regex::new(r"^([A-Z]+-\d+)(\S*)?(?:\s+(.*))?$").unwrap();
-
-    if let Some(cap) = re.captures(self) {
+    if let Some(cap) = RE.captures(self) {
       let ticket = cap.get(1).map(|m| m.as_str());
       let rest = cap.get(3).map(|m| m.as_str());
       return (ticket, rest);
@@ -49,7 +52,7 @@ pub(crate) fn create_commit(br: &str, msg: &str) -> Result<String> {
     ((Some(t1), _), (Some(t2), _)) if t1 != t2 => bail!("Branch and message tickets do not match".to_string()),
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
     (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
-    (_, (_, None)) => bail!("Failed to parse commit message"),
+    (_, (_, None)) => bail!("No commit message found".to_string()),
     ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
   }
 }
@@ -67,13 +70,13 @@ pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
 
 // Runs: git add . && git commit -m <commit_msg>
 fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
+  // Add all files to the index
   let mut index = repo.index().context("Failed to get current index")?;
   index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
   index.write().context("Failed to write index from `git add`")?;
 
   let tree_oid = index.write_tree().context("Failed to write index tree")?;
   let tree = repo.find_tree(tree_oid).context("Failed to find index tree")?;
-
   let signature = repo.signature().context("Failed to get current signature")?;
 
   // No commits yet, create an initial commit

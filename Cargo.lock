@@ -57,6 +57,7 @@ dependencies = [
  "anyhow",
  "colored",
  "git2",
+ "lazy_static",
  "regex",
  "ucfirst",
 ]
