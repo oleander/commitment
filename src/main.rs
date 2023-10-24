@@ -32,11 +32,7 @@ impl Ticket for str {
 
 // Capitalize the first letter of a string
 pub(crate) fn capitalize_first(s: &str) -> String {
-  let mut c = s.chars();
-  match c.next() {
-    None => String::new(),
-    Some(f) => f.to_uppercase().chain(c).collect(),
-  }
+  s.chars().next().map_or(String::new(), |f| f.to_uppercase().to_string() + &s[1..])
 }
 
 // Create a commit message from the branch name and the commit message
@@ -64,7 +60,7 @@ pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
 
   match repo.statuses(Some(&mut options)) {
     Ok(statuses) => Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT)),
-    Err(e) => Err(anyhow!("Failed to get statuses: {}", e)),
+    Err(e) => bail!("Failed to get statuses: {}", e),
   }
 }
 
