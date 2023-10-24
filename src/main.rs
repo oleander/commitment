@@ -48,13 +48,9 @@ pub(crate) fn capitalize_first(s: &str) -> String {
 pub(crate) fn commit(br: &str, msg: &str) -> Result<String> {
   match (br.to_ticket(), msg.to_ticket()) {
     ((Some(t1), _), (Some(t2), _)) if t1 != t2 => bail!("Branch and message tickets do not match".to_string()),
-
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
-
     (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
-
     (_, (_, None)) => bail!("Failed to parse commit message"),
-
     ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
   }
 }
@@ -84,13 +80,11 @@ fn main() -> anyhow::Result<()> {
   }
 
   let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
-  let branch_name_option = if !repo.is_empty().unwrap() {
-    repo.head().context("Failed to get HEAD")?.shorthand().map(|s| s.to_string())
-  } else {
-    None
+  let head = repo.head().context("Failed to get HEAD")?;
+  // Branch name used to generate prefixes for commit messages
+  let Some(branch_name) = head.shorthand() else {
+    bail!("Could not find branch name");
   };
-
-  let branch_name = branch_name_option.as_deref().ok_or_else(|| anyhow::anyhow!("Failed to get branch name"))?;
 
   let commit_msg = commit(branch_name, &message)?;
 
