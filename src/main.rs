@@ -55,7 +55,7 @@ pub(crate) fn create_commit(br: &str, msg: &str) -> Result<String> {
 }
 
 // Check if there are any uncommitted changes
-pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool, anyhow::Error> {
+pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
   let mut options = StatusOptions::new();
   options.include_untracked(true).recurse_untracked_dirs(true);
 
@@ -65,6 +65,7 @@ pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool, any
   }
 }
 
+// Runs: git add . && git commit -m <commit_msg>
 fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
   let mut index = repo.index().context("Failed to get current index")?;
   index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
@@ -120,7 +121,7 @@ fn get_branch_name(repo: &Repository) -> Result<String> {
   Ok(branch_name.to_string())
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
   // Recursively search for a git repository
   let current_dir = std::env::current_dir()?;
   let flags = git2::RepositoryOpenFlags::empty();
