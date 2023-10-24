@@ -80,11 +80,20 @@ fn main() {
     std::process::exit(1);
   }
 
-  let head = repo.head().expect("Failed to get HEAD");
-  let branch = head.shorthand().expect("No branch currently checked out");
-
   let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
-  let commit = commit(branch, &message).expect("Failed to create commit message");
+  let branch_name_option = if !repo.is_empty().unwrap() {
+    let head = repo.head().expect("Failed to get HEAD");
+    head.shorthand().map(|s| s.to_string())
+  } else {
+    None
+  };
+
+  let Some(branch_name) = branch_name_option.as_deref() else {
+    eprintln!("Failed to get branch name");
+    std::process::exit(1);
+  };
+
+  let commit_msg = commit(branch_name, &message).expect("Failed to create commit message");
 
   let mut index = repo.index().expect("Failed to get current index");
   index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).expect("Failed to run `git add`");
@@ -93,19 +102,32 @@ fn main() {
   let tree_oid = index.write_tree().expect("Failed to write index tree");
   let tree = repo.find_tree(tree_oid).expect("Failed to find index tree");
 
-  let oid = head.target().expect("Failed to get HEAD target");
-  let parent = repo.find_commit(oid).expect("Failed to find parent commit");
-
   let signature = repo.signature().expect("Failed to get current signature");
 
-  repo
-    .commit(
-      Some("HEAD"),
-      &signature,
-      &signature,
-      &commit,
-      &tree,
-      &[&parent],
-    )
-    .expect("Failed to commit");
+  if repo.is_empty().unwrap() {
+    // No commits yet, create an initial commit
+    repo
+      .commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        &commit_msg,
+        &tree,
+        &[],
+      )
+      .expect("Failed to create an initial commit");
+  } else {
+    let oid = repo.head().unwrap().target().expect("Failed to get HEAD target");
+    let parent = repo.find_commit(oid).expect("Failed to find parent commit");
+    repo
+      .commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        &commit_msg,
+        &tree,
+        &[&parent],
+      )
+      .expect("Failed to commit");
+  }
 }
