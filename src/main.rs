@@ -79,8 +79,7 @@ fn main() -> anyhow::Result<()> {
   )
   .context("Failed to open repository")?;
 
-  let has_changes = has_changes(&repo)?;
-  if !has_changes {
+  if !has_changes(&repo)? {
     anyhow::bail!("No uncommitted changes found");
   }
 
