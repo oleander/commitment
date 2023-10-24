@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
-colored = "2.0.3"
+colored = "2.0.4"
 git2 = "0.17.2"
-regex = "1.8.4"
+regex = "1.10.2"
 ucfirst = "0.1.0"

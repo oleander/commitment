@@ -44,7 +44,7 @@ pub(crate) fn capitalize_first(s: &str) -> String {
 // * Message              -> Message
 // * ABC-123x             -> ABC-123
 // * ABC-123-NOPE         -> ABC-123
-pub(crate) fn commit(br: &str, msg: &str) -> Result<String> {
+pub(crate) fn create_commit(br: &str, msg: &str) -> Result<String> {
   match (br.to_ticket(), msg.to_ticket()) {
     ((Some(t1), _), (Some(t2), _)) if t1 != t2 => bail!("Branch and message tickets do not match".to_string()),
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
@@ -109,7 +109,8 @@ fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
   Ok(())
 }
 
-fn branch_name(repo: &Repository) -> Result<String> {
+// Get current branch name
+fn get_branch_name(repo: &Repository) -> Result<String> {
   let head = repo.head().context("Failed to get HEAD")?;
 
   let Some(branch_name) = head.shorthand() else {
@@ -130,8 +131,8 @@ fn main() -> anyhow::Result<()> {
   }
 
   let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
-  let branch_name = branch_name(&repo)?;
-  let commit_msg = commit(branch_name.as_str(), &message)?;
+  let branch_name = get_branch_name(&repo)?;
+  let commit_msg = create_commit(branch_name.as_str(), &message)?;
   add_and_commit(&commit_msg, &repo)?;
 
   Ok(())
