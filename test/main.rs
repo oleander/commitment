@@ -43,3 +43,21 @@ fn test_capitalize_first() {
   assert_eq!(capitalize_first("Abc"), "Abc");
   assert_eq!(capitalize_first(""), "");
 }
+
+
+#[test]
+fn test_to_ticket() {
+  assert_eq!(
+    "Head Tail1 Tail2 Tail3".to_ticket(),
+    (None, Some("Head Tail1 Tail2 Tail3"))
+  );
+  assert_eq!(
+    "ABC-123 Tail1 Tail2".to_ticket(),
+    (Some("ABC-123"), Some("Tail1 Tail2"))
+  );
+  assert_eq!("ABC-123 Tail".to_ticket(), (Some("ABC-123"), Some("Tail")));
+  assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
+  assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
+  assert_eq!("Head".to_ticket(), (None, Some("Head")));
+  assert_eq!("".to_ticket(), (None, None));
+}
