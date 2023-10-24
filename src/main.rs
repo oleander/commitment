@@ -1,4 +1,4 @@
-use git2::{IndexAddOption, Repository, StatusOptions};
+use git2::{Repository, StatusOptions, IndexAddOption};
 use regex::Regex;
 
 trait Ticket {
@@ -40,17 +40,27 @@ fn capitalize_first(s: &str) -> String {
 // * Message              -> Message
 // * ABC-123x             -> ABC-123
 // * ABC-123-NOPE         -> ABC-123
-fn commit(br: &str, msg: &str) -> Result<String, String> {
+fn commit(br: &str, msg: &str) -> Result<String, String>{
   match (br.to_ticket(), msg.to_ticket()) {
-    ((Some(t1), _), (Some(t2), _)) if t1 != t2 => Err("Branch and message tickets do not match".to_string()),
+    ((Some(t1), _), (Some(t2), _)) if t1 != t2 => {
+      Err("Branch and message tickets do not match".to_string())
+    }
 
-    ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
+    ((Some(ticket), _), (None, Some(msg))) => {
+      Ok(format!("{} {}", ticket, capitalize_first(msg)))
+    }
 
-    (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
+    (_, (Some(ticket), Some(msg))) => {
+      Ok(format!("{} {}", ticket, capitalize_first(msg)))
+    }
 
-    (_, (_, None)) => Err("No commit message".to_string()),
+    (_, (_, None)) => {
+      Err("No commit message".to_string())
+    }
 
-    ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
+    ((None, _), (None, Some(msg))) => {
+      Ok(capitalize_first(msg))
+    }
   }
 }
 
@@ -60,16 +70,20 @@ fn has_changes(repo: &Repository) -> Result<bool, String> {
   options.include_untracked(true).recurse_untracked_dirs(true);
 
   match repo.statuses(Some(&mut options)) {
-    Ok(statuses) => Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT)),
-    Err(e) => Err(format!("Failed to get statuses: {}", e)),
+    Ok(statuses) => {
+      Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT))
+    }
+    Err(e) => Err(format!("Failed to get statuses: {}", e))
   }
 }
 
 fn main() {
-  let repo = Repository::open(".").expect("Failed to open repository");
+  let current_dir = std::env::current_dir().expect("Failed to get current directory");
+  let repo = Repository::open_ext(current_dir, git2::RepositoryOpenFlags::empty(), &[]).expect("Failed to open repository");
 
   let has_changes = has_changes(&repo).expect("Failed to check for uncommitted changes");
   if !has_changes {
+
     eprintln!("No uncommitted changes found");
     std::process::exit(1);
   }
@@ -92,28 +106,13 @@ fn main() {
 
   let signature = repo.signature().expect("Failed to get current signature");
 
-  repo
-    .commit(
-      Some("HEAD"),
-      &signature,
-      &signature,
-      &commit,
-      &tree,
-      &[&parent],
-    )
-    .expect("Failed to commit");
+  repo.commit(Some("HEAD"), &signature, &signature, &commit, &tree, &[&parent]).expect("Failed to commit");
 }
 
 #[test]
 fn test_to_ticket() {
-  assert_eq!(
-    "Head Tail1 Tail2 Tail3".to_ticket(),
-    (None, Some("Head Tail1 Tail2 Tail3"))
-  );
-  assert_eq!(
-    "ABC-123 Tail1 Tail2".to_ticket(),
-    (Some("ABC-123"), Some("Tail1 Tail2"))
-  );
+  assert_eq!("Head Tail1 Tail2 Tail3".to_ticket(), (None, Some("Head Tail1 Tail2 Tail3")));
+  assert_eq!("ABC-123 Tail1 Tail2".to_ticket(), (Some("ABC-123"), Some("Tail1 Tail2")));
   assert_eq!("ABC-123 Tail".to_ticket(), (Some("ABC-123"), Some("Tail")));
   assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
   assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
@@ -123,32 +122,14 @@ fn test_to_ticket() {
 
 #[test]
 fn test_to_commit() {
-  assert_eq!(
-    commit("INVALID INVALID", "ABC-123 Message"),
-    Ok("ABC-123 Message".to_string())
-  );
-  assert_eq!(
-    commit("INVALID", "ABC-123 Message"),
-    Ok("ABC-123 Message".to_string())
-  );
-  assert_eq!(
-    commit("", "ABC-123 Message"),
-    Ok("ABC-123 Message".to_string())
-  );
-  assert_eq!(
-    commit("ABC-123", "Message"),
-    Ok("ABC-123 Message".to_string())
-  );
-  assert_eq!(
-    commit("ABC-123-DEF", "Tail"),
-    Ok("ABC-123 Tail".to_string())
-  );
+  assert_eq!(commit("INVALID INVALID", "ABC-123 Message"), Ok("ABC-123 Message".to_string()));
+  assert_eq!(commit("INVALID", "ABC-123 Message"), Ok("ABC-123 Message".to_string()));
+  assert_eq!(commit("", "ABC-123 Message"), Ok("ABC-123 Message".to_string()));
+  assert_eq!(commit("ABC-123", "Message"), Ok("ABC-123 Message".to_string()));
+  assert_eq!(commit("ABC-123-DEF", "Tail"), Ok("ABC-123 Tail".to_string()));
   assert_eq!(commit("", "message"), Ok("Message".to_string()));
   assert_eq!(commit("X", "message"), Ok("Message".to_string()));
-  assert_eq!(
-    commit("ABC-123", "message"),
-    Ok("ABC-123 Message".to_string())
-  );
+  assert_eq!(commit("ABC-123", "message"), Ok("ABC-123 Message".to_string()));
   assert!(commit("ABC-123", "ABC-123 Tail1 Tail2").is_ok());
   assert!(commit("ABC-123", "DEF-456 Tail").is_err());
   assert!(commit("ABC-123", "ABC-123 Tail").is_ok());
@@ -164,3 +145,4 @@ fn test_capitalize_first() {
   assert_eq!(capitalize_first("Abc"), "Abc");
   assert_eq!(capitalize_first(""), "");
 }
+
