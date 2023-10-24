@@ -30,7 +30,7 @@ impl Ticket for str {
 }
 
 // Capitalize the first letter of a string
-pub(crate) fn capitalize_first(s: &str) -> String {
+fn capitalize_first(s: &str) -> String {
   s.chars().next().map_or(String::new(), |f| f.to_uppercase().to_string() + &s[1..])
 }
 
@@ -42,7 +42,7 @@ pub(crate) fn capitalize_first(s: &str) -> String {
 // * Message              -> Message
 // * ABC-123x             -> ABC-123
 // * ABC-123-NOPE         -> ABC-123
-pub(crate) fn create_commit(br: &str, msg: &str) -> Result<String> {
+fn create_commit(br: &str, msg: &str) -> Result<String> {
   match (br.to_ticket(), msg.to_ticket()) {
     ((Some(t1), _), (Some(t2), _)) if t1 != t2 => bail!("Branch and message tickets do not match".to_string()),
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
@@ -53,7 +53,7 @@ pub(crate) fn create_commit(br: &str, msg: &str) -> Result<String> {
 }
 
 // Check if there are any uncommitted changes
-pub(crate) fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
+fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
   let mut options = StatusOptions::new();
   options.include_untracked(true).recurse_untracked_dirs(true);
 
