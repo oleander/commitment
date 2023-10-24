@@ -1,3 +1,7 @@
+use anyhow::anyhow;
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use git2::{IndexAddOption, Repository, StatusOptions};
 use regex::Regex;
 
@@ -40,72 +44,67 @@ fn capitalize_first(s: &str) -> String {
 // * Message              -> Message
 // * ABC-123x             -> ABC-123
 // * ABC-123-NOPE         -> ABC-123
-fn commit(br: &str, msg: &str) -> Result<String, String> {
+fn commit(br: &str, msg: &str) -> Result<String> {
   match (br.to_ticket(), msg.to_ticket()) {
-    ((Some(t1), _), (Some(t2), _)) if t1 != t2 => Err("Branch and message tickets do not match".to_string()),
+    ((Some(t1), _), (Some(t2), _)) if t1 != t2 => bail!("Branch and message tickets do not match".to_string()),
 
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
 
     (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
 
-    (_, (_, None)) => Err("No commit message".to_string()),
+    (_, (_, None)) => bail!("Failed to parse commit message"),
 
     ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
   }
 }
 
 // Check if there are any uncommitted changes
-fn has_changes(repo: &Repository) -> Result<bool, String> {
+fn has_changes(repo: &Repository) -> Result<bool, anyhow::Error> {
   let mut options = StatusOptions::new();
   options.include_untracked(true).recurse_untracked_dirs(true);
 
   match repo.statuses(Some(&mut options)) {
     Ok(statuses) => Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT)),
-    Err(e) => Err(format!("Failed to get statuses: {}", e)),
+    Err(e) => Err(anyhow!("Failed to get statuses: {}", e)),
   }
 }
 
-fn main() {
-  let current_dir = std::env::current_dir().expect("Failed to get current directory");
+fn main() -> anyhow::Result<()> {
+  let current_dir = std::env::current_dir().context("Failed to get current directory")?;
   let repo = Repository::open_ext(
     current_dir,
     git2::RepositoryOpenFlags::empty(),
     &[] as &[&str],
   )
-  .expect("Failed to open repository");
+  .context("Failed to open repository")?;
 
-  let has_changes = has_changes(&repo).expect("Failed to check for uncommitted changes");
+  let has_changes = has_changes(&repo)?;
   if !has_changes {
-    eprintln!("No uncommitted changes found");
-    std::process::exit(1);
+    anyhow::bail!("No uncommitted changes found");
   }
 
   let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
   let branch_name_option = if !repo.is_empty().unwrap() {
-    let head = repo.head().expect("Failed to get HEAD");
-    head.shorthand().map(|s| s.to_string())
+    repo.head().context("Failed to get HEAD")?.shorthand().map(|s| s.to_string())
   } else {
     None
   };
 
-  let Some(branch_name) = branch_name_option.as_deref() else {
-    eprintln!("Failed to get branch name");
-    std::process::exit(1);
-  };
+  let branch_name = branch_name_option.as_deref().ok_or_else(|| anyhow::anyhow!("Failed to get branch name"))?;
 
-  let commit_msg = commit(branch_name, &message).expect("Failed to create commit message");
+  let commit_msg = commit(branch_name, &message)?;
 
-  let mut index = repo.index().expect("Failed to get current index");
-  index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).expect("Failed to run `git add`");
-  index.write().expect("Failed to write index from `git add`");
+  let mut index = repo.index().context("Failed to get current index")?;
+  index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
+  index.write().context("Failed to write index from `git add`")?;
 
-  let tree_oid = index.write_tree().expect("Failed to write index tree");
-  let tree = repo.find_tree(tree_oid).expect("Failed to find index tree");
+  let tree_oid = index.write_tree().context("Failed to write index tree")?;
+  let tree = repo.find_tree(tree_oid).context("Failed to find index tree")?;
 
-  let signature = repo.signature().expect("Failed to get current signature");
+  let signature = repo.signature().context("Failed to get current signature")?;
 
+  // No commits yet, create an initial commit
   if repo.is_empty().unwrap() {
-    // No commits yet, create an initial commit
     repo
       .commit(
         Some("HEAD"),
@@ -115,10 +114,14 @@ fn main() {
         &tree,
         &[],
       )
-      .expect("Failed to create an initial commit");
+      .context("Failed to create an initial commit")?;
   } else {
-    let oid = repo.head().unwrap().target().expect("Failed to get HEAD target");
-    let parent = repo.find_commit(oid).expect("Failed to find parent commit");
+    let oid = repo
+      .head()
+      .context("Failed to get HEAD")?
+      .target()
+      .ok_or_else(|| anyhow::anyhow!("Failed to get HEAD target"))?;
+    let parent = repo.find_commit(oid).context("Failed to find parent commit")?;
     repo
       .commit(
         Some("HEAD"),
@@ -128,6 +131,8 @@ fn main() {
         &tree,
         &[&parent],
       )
-      .expect("Failed to commit");
+      .context("Failed to commit")?;
   }
+
+  Ok(())
 }
