@@ -82,7 +82,7 @@ pub fn add_and_commit(repo: &Repository, msg: &str) -> Result<()> {
         .peel(ObjectType::Commit)
         .context("Failed to peel head")?
         .into_commit()
-        .map_err(|e| anyhow!("Failed to resolve parent commit: {}", e))?;
+        .map_err(|_| anyhow!("Failed to resolve parent commit"))?;
 
       repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[&parent]).context("Failed to commit (1)")?;
     },
