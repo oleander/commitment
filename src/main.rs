@@ -2,8 +2,8 @@ use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use git2::{IndexAddOption, Repository, StatusOptions};
-use regex::Regex;
 use lazy_static::lazy_static;
+use regex::Regex;
 
 lazy_static! {
   static ref RE: Regex = Regex::new(r"^([A-Z]+-\d+)(\S*)?(?:\s+(.*))?$").unwrap();
@@ -77,14 +77,7 @@ fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
   // No commits yet, create an initial commit
   if repo.is_empty().unwrap() {
     repo
-      .commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        &commit_msg,
-        &tree,
-        &[],
-      )
+      .commit(Some("HEAD"), &signature, &signature, &commit_msg, &tree, &[])
       .context("Failed to create an initial commit")?;
   } else {
     let oid = repo
@@ -93,16 +86,7 @@ fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
       .target()
       .ok_or_else(|| anyhow::anyhow!("Failed to get HEAD target"))?;
     let parent = repo.find_commit(oid).context("Failed to find parent commit")?;
-    repo
-      .commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        &commit_msg,
-        &tree,
-        &[&parent],
-      )
-      .context("Failed to commit")?;
+    repo.commit(Some("HEAD"), &signature, &signature, &commit_msg, &tree, &[&parent]).context("Failed to commit")?;
   }
 
   Ok(())
@@ -183,14 +167,8 @@ fn test_capitalize_first() {
 
 #[test]
 fn test_to_ticket() {
-  assert_eq!(
-    "Head Tail1 Tail2 Tail3".to_ticket(),
-    (None, Some("Head Tail1 Tail2 Tail3"))
-  );
-  assert_eq!(
-    "ABC-123 Tail1 Tail2".to_ticket(),
-    (Some("ABC-123"), Some("Tail1 Tail2"))
-  );
+  assert_eq!("Head Tail1 Tail2 Tail3".to_ticket(), (None, Some("Head Tail1 Tail2 Tail3")));
+  assert_eq!("ABC-123 Tail1 Tail2".to_ticket(), (Some("ABC-123"), Some("Tail1 Tail2")));
   assert_eq!("ABC-123 Tail".to_ticket(), (Some("ABC-123"), Some("Tail")));
   assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
   assert_eq!("ABC-123".to_ticket(), (Some("ABC-123"), None));
