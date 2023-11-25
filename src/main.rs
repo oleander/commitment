@@ -1,7 +1,9 @@
-use anyhow::{bail, Context, Result};
 use git2::{IndexAddOption, Repository, StatusOptions};
+use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
+use anyhow::anyhow;
 use regex::Regex;
+use log::debug;
 
 lazy_static! {
   static ref RE: Regex = Regex::new(r"^([A-Z]+-\d+)(\S*)?(?:\s+(.*))?$").unwrap();
@@ -61,8 +63,6 @@ fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
   }
 }
 
-use log::debug;
-use anyhow::anyhow;
 
 pub fn add_and_commit(repo: &Repository, msg: &str) -> Result<()> {
   debug!("[commit] Committing with message");
@@ -82,7 +82,7 @@ pub fn add_and_commit(repo: &Repository, msg: &str) -> Result<()> {
         .peel(ObjectType::Commit)
         .context("Failed to peel head")?
         .into_commit()
-        .map_err(|_| anyhow!("Failed to resolve parent commit"))?;
+        .map_err(|e| anyhow!("Failed to resolve parent commit: {}", e))?;
 
       repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[&parent]).context("Failed to commit (1)")?;
     },
