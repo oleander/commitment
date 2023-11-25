@@ -1,6 +1,4 @@
-use anyhow::bail;
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use git2::{IndexAddOption, Repository, StatusOptions};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -48,7 +46,7 @@ fn create_commit(br: &str, msg: &str) -> Result<String> {
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
     (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
     (_, (_, None)) => bail!("No commit message found".to_string()),
-    ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
+    ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg))
   }
 }
 
@@ -59,34 +57,38 @@ fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
 
   match repo.statuses(Some(&mut options)) {
     Ok(statuses) => Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT)),
-    Err(e) => bail!("Failed to get statuses: {}", e),
+    Err(e) => bail!("Failed to get statuses: {}", e)
   }
 }
 
-// Runs: git add . && git commit -m <commit_msg>
-fn add_and_commit(commit_msg: &str, repo: &Repository) -> Result<()> {
-  // Add all files to the index
-  let mut index = repo.index().context("Failed to get current index")?;
+use log::debug;
+use anyhow::anyhow;
+
+pub fn add_and_commit(repo: &Repository, msg: &str) -> Result<()> {
+  debug!("[commit] Committing with message");
+
+  let mut index = repo.index().expect("Failed to get index");
   index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
   index.write().context("Failed to write index from `git add`")?;
+  let oid = index.write_tree().context("Failed to write tree")?;
+  let tree = repo.find_tree(oid).context("Failed to find tree")?;
+  let signature = repo.signature().context("Failed to get signature")?;
 
-  let tree_oid = index.write_tree().context("Failed to write index tree")?;
-  let tree = repo.find_tree(tree_oid).context("Failed to find index tree")?;
-  let signature = repo.signature().context("Failed to get current signature")?;
+  match repo.head() {
+    Ok(ref head) => {
+      let parent = head
+        .resolve()
+        .context("Failed to resolve head")?
+        .peel(ObjectType::Commit)
+        .context("Failed to peel head")?
+        .into_commit()
+        .map_err(|_| anyhow!("Failed to resolve parent commit"))?;
 
-  // No commits yet, create an initial commit
-  if repo.is_empty().unwrap() {
-    repo
-      .commit(Some("HEAD"), &signature, &signature, &commit_msg, &tree, &[])
-      .context("Failed to create an initial commit")?;
-  } else {
-    let oid = repo
-      .head()
-      .context("Failed to get HEAD")?
-      .target()
-      .ok_or_else(|| anyhow::anyhow!("Failed to get HEAD target"))?;
-    let parent = repo.find_commit(oid).context("Failed to find parent commit")?;
-    repo.commit(Some("HEAD"), &signature, &signature, &commit_msg, &tree, &[&parent]).context("Failed to commit")?;
+      repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[&parent]).context("Failed to commit (1)")?;
+    },
+    Err(_) => {
+      repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[]).context("Failed to commit (2)")?;
+    }
   }
 
   Ok(())
@@ -103,6 +105,8 @@ fn get_branch_name(repo: &Repository) -> Result<String> {
   Ok(branch_name.to_string())
 }
 
+use git2::ObjectType;
+
 fn main() -> Result<()> {
   // Recursively search for a git repository
   let current_dir = std::env::current_dir()?;
@@ -110,13 +114,14 @@ fn main() -> Result<()> {
   let repo = Repository::open_ext(current_dir, flags, &[] as &[&str])?;
 
   if !has_repo_uncommited_changes(&repo)? {
-    anyhow::bail!("No uncommitted changes found");
+    bail!("No uncommitted changes found");
   }
 
   let message = std::env::args().skip(1).collect::<Vec<String>>().join(" ");
   let branch_name = get_branch_name(&repo)?;
-  let commit_msg = create_commit(branch_name.as_str(), &message)?;
-  add_and_commit(&commit_msg, &repo)?;
+  let msg = create_commit(branch_name.as_str(), &message)?;
+
+  add_and_commit(&repo, &msg)?;
 
   Ok(())
 }
