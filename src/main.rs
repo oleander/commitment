@@ -1,7 +1,6 @@
 use git2::{IndexAddOption, Repository, StatusOptions};
 use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
-use anyhow::anyhow;
 use regex::Regex;
 use log::debug;
 
@@ -48,7 +47,7 @@ fn create_commit(br: &str, msg: &str) -> Result<String> {
     ((Some(ticket), _), (None, Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
     (_, (Some(ticket), Some(msg))) => Ok(format!("{} {}", ticket, capitalize_first(msg))),
     (_, (_, None)) => bail!("No commit message found".to_string()),
-    ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg))
+    ((None, _), (None, Some(msg))) => Ok(capitalize_first(msg)),
   }
 }
 
@@ -59,37 +58,25 @@ fn has_repo_uncommited_changes(repo: &Repository) -> Result<bool> {
 
   match repo.statuses(Some(&mut options)) {
     Ok(statuses) => Ok(statuses.iter().any(|s| s.status() != git2::Status::CURRENT)),
-    Err(e) => bail!("Failed to get statuses: {}", e)
+    Err(e) => bail!("Failed to get statuses: {}", e),
   }
 }
-
 
 pub fn add_and_commit(repo: &Repository, msg: &str) -> Result<()> {
   debug!("[commit] Committing with message");
 
   let mut index = repo.index().expect("Failed to get index");
-  index.add_all(["."].iter(), IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
+
+  index.add_all(["."], IndexAddOption::DEFAULT, None).context("Failed to run `git add`")?;
   index.write().context("Failed to write index from `git add`")?;
+
   let oid = index.write_tree().context("Failed to write tree")?;
-  let tree = repo.find_tree(oid).context("Failed to find tree")?;
   let signature = repo.signature().context("Failed to get signature")?;
+  let tree = repo.find_tree(oid).context("Failed to find tree")?;
+  let parent = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+  let parents = parent.iter().collect::<Vec<&git2::Commit>>();
 
-  match repo.head() {
-    Ok(ref head) => {
-      let parent = head
-        .resolve()
-        .context("Failed to resolve head")?
-        .peel(ObjectType::Commit)
-        .context("Failed to peel head")?
-        .into_commit()
-        .map_err(|_| anyhow!("Failed to resolve parent commit"))?;
-
-      repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[&parent]).context("Failed to commit (1)")?;
-    },
-    Err(_) => {
-      repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, &[]).context("Failed to commit (2)")?;
-    }
-  }
+  repo.commit(Some("HEAD"), &signature, &signature, &msg, &tree, parents.as_slice()).context("Could not commit")?;
 
   Ok(())
 }
@@ -104,8 +91,6 @@ fn get_branch_name(repo: &Repository) -> Result<String> {
 
   Ok(branch_name.to_string())
 }
-
-use git2::ObjectType;
 
 fn main() -> Result<()> {
   // Recursively search for a git repository
@@ -125,43 +110,6 @@ fn main() -> Result<()> {
 
   Ok(())
 }
-
-// #[test]
-// fn test_to_commit() {
-//   assert_eq!(
-//     commit("INVALID INVALID", "ABC-123 Message"),
-//     Ok("ABC-123 Message".to_string())
-//   );
-//   assert_eq!(
-//     commit("INVALID", "ABC-123 Message"),
-//     Ok("ABC-123 Message".to_string())
-//   );
-//   assert_eq!(
-//     commit("", "ABC-123 Message"),
-//     Ok("ABC-123 Message".to_string())
-//   );
-//   assert_eq!(
-//     commit("ABC-123", "Message"),
-//     Ok("ABC-123 Message".to_string())
-//   );
-//   assert_eq!(
-//     commit("ABC-123-DEF", "Tail"),
-//     Ok("ABC-123 Tail".to_string())
-//   );
-//   assert_eq!(commit("", "message"), Ok("Message".to_string()));
-//   assert_eq!(commit("X", "message"), Ok("Message".to_string()));
-//   assert_eq!(
-//     commit("ABC-123", "message"),
-//     Ok("ABC-123 Message".to_string())
-//   );
-//   assert!(commit("ABC-123", "ABC-123 Tail1 Tail2").is_ok());
-//   assert!(commit("ABC-123", "DEF-456 Tail").is_err());
-//   assert!(commit("ABC-123", "ABC-123 Tail").is_ok());
-//   assert!(commit("ABC-123", "DEF-456").is_err());
-//   assert!(commit("ABC-123-DEF", "").is_err());
-//   assert!(commit("ABC-123", "").is_err());
-//   assert!(commit("", "").is_err());
-// }
 
 #[test]
 fn test_capitalize_first() {
